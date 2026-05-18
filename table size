@@ -1,15 +1,1 @@
-kubectl exec -i mongodb-0 -n commons -- env HOME=/tmp mongosh creol-api --quiet --eval "
-var bundle = db.bundles.findOne({ name: /Execution Package BHI/i });
-var ruleIds = db.bundle_rulesources.distinct('bundleRuleSourceId.ruleId', { 'bundleRuleSourceId.bundleId': bundle._id.toString(), deleted: { \$ne: true } });
-var tableNames = [];
-db.rules.find({ _id: { \$in: ruleIds } }, { tableNames: 1 }).forEach(r => {
-  if (r.tableNames) r.tableNames.forEach(t => { if (tableNames.indexOf(t) === -1) tableNames.push(t); });
-});
-print('tableName,docCount,sizeBytes,storageSizeBytes');
-tableNames.forEach(t => {
-  try {
-    var s = db.runCommand({ collStats: 'table_' + t });
-    print(t + ',' + s.count + ',' + s.size + ',' + s.storageSize);
-  } catch(e) { print(t + ',ERROR,,'); }
-});
-" > bhi_tables.csv
+kubectl exec -i mongodb-0 -n commons -- env HOME=/tmp mongosh creol-api --quiet --eval "var bundle = db.bundles.findOne({ name: /Execution Package BHI/i }); var ruleIds = db.bundle_rulesources.distinct('bundleRuleSourceId.ruleId', { 'bundleRuleSourceId.bundleId': bundle._id.toString() }); var sample = ruleIds[0]; print('Sample ruleId from bundle_rulesources: ' + sample); var r1 = db.rules.findOne({ _id: sample }); print('Match by _id: ' + (r1 ? 'YES' : 'NO')); var r2 = db.rules.findOne({ ruleId: sample }); print('Match by ruleId field: ' + (r2 ? 'YES' : 'NO')); var r3 = db.rules.findOne({}); print('Sample rule keys: ' + JSON.stringify(Object.keys(r3)));"
