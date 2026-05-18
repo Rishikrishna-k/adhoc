@@ -1,1 +1,32 @@
-kubectl exec -i mongodb-0 -n commons -- env HOME=/tmp mongosh creol-api --quiet --eval "var sample = '1000005.1.0'; var r = db.rules.findOne({ entityLookupValue: sample }); print('Match by entityLookupValue: ' + (r ? 'YES - tableNames: ' + JSON.stringify(r.tableNames) : 'NO')); var rWithTables = db.rules.findOne({ tableNames: { `$exists: true, `$ne: [] } }); print('Any rule with tableNames: ' + (rWithTables ? JSON.stringify(rWithTables.tableNames) : 'NONE FOUND'));"
+# Step 1 — Create temp pod mounting the PVC
+kubectl run pvc-inspector --image=busybox --restart=Never -n cs-bhi-prod --overrides='{"spec":{"containers":[{"name":"pvc-inspector","image":"busybox","command":["sleep","3600"],"volumeMounts":[{"mountPath":"/data","name":"rules-data"}]}],"volumes":[{"name":"rules-data","persistentVolumeClaim":{"claimName":"rules-bundle-data"}}]}}'
+
+# Step 2 — Wait for pod to be ready
+kubectl wait --for=condition=Ready pod/pvc-inspector -n cs-bhi-prod --timeout=60s
+
+# Step 3 — Confirm pod is running
+kubectl get pod pvc-inspector -n cs-bhi-prod
+
+# Step 4 — See top level directory structure
+kubectl exec -it pvc-inspector -n cs-bhi-prod -- ls -lh /data/
+
+# Step 5 — Find all rule-bundle.jar files (shows full paths and dates)
+kubectl exec -it pvc-inspector -n cs-bhi-prod -- find /data -name "rule-bundle.jar" 2>/dev/null
+
+# Step 6 — Find BHI bundle specifically (bundle ID 69bad5961ae10655ff01a60b)
+kubectl exec -it pvc-inspector -n cs-bhi-prod -- find /data -path "*69bad5961ae10655ff01a60b*" 2>/dev/null
+
+# Step 7 — List all dates available for this bundle
+kubectl exec -it pvc-inspector -n cs-bhi-prod -- ls -lh /data/69bad5961ae10655ff01a60b/
+
+# Step 8 — List full JAR contents and pipe to local file (replace <date> with latest from step 7)
+kubectl exec -i pvc-inspector -n cs-bhi-prod -- unzip -l /data/69bad5961ae10655ff01a60b/<date>/rule-bundle.jar > jar_contents.txt
+
+# Step 9 — Filter only CSV files with sizes and save locally
+kubectl exec -i pvc-inspector -n cs-bhi-prod -- unzip -l /data/69bad5961ae10655ff01a60b/<date>/rule-bundle.jar | grep "\.csv" > bhi_tables_raw.txt
+
+# Step 10 — Verify output locally
+cat bhi_tables_raw.txt
+
+# Step 11 — Clean up temp pod when done
+kubectl delete pod pvc-inspector -n cs-bhi-prod
