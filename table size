@@ -1,0 +1,20 @@
+// 1. Get bundle
+var bundle = db.bundles.findOne({ name: /BHI/i });
+print("Bundle:", bundle._id, bundle.name);
+
+// 2. Get rule IDs
+var ruleIds = db.bundle_rulesources.distinct("bundleRuleSourceId.ruleId", { bundleId: bundle._id.toString(), deleted: { $ne: true } });
+print("Rule count:", ruleIds.length);
+
+// 3. Get table names
+var tableNames = db.ruletablemappings.distinct("tableName", { ruleId: { $in: ruleIds }, deleted: { $ne: true } });
+print("Tables used:", tableNames.length);
+
+// 4. Print size of each table collection
+tableNames.forEach(t => {
+  var collName = "table_" + t;
+  try {
+    var s = db.runCommand({ collStats: collName });
+    print(t, "\t size:", s.size, "\t storageSize:", s.storageSize, "\t docs:", s.count);
+  } catch(e) { print(t, "- collection not found"); }
+});
