@@ -25,6 +25,9 @@ kubectl exec -i pvc-inspector -n cs-bhi-prod -- unzip -l /data/69bad5961ae10655f
 # Step 9 — Filter only CSV files with sizes and save locally
 kubectl exec -i pvc-inspector -n cs-bhi-prod -- unzip -l /data/69bad5961ae10655ff01a60b/<date>/rule-bundle.jar | grep "\.csv" > bhi_tables_raw.txt
 
+# Step 4 — Get all csv.gz files with sizes and pipe to local CSV
+kubectl exec -i pvc-inspector -n cs-bhi-prod -- find /data/69bad5961ae10655ff01a60b/<date>/tables -name "*.csv.gz" -ls > bhi_tables_raw.txt
+
 # Step 10 — Verify output locally
 cat bhi_tables_raw.txt
 
