@@ -1,10 +1,15 @@
-kubectl exec -it <mongo-pod> -n cs-bhi-prod -- mongosh creol-api --quiet --eval "
-var bundle = db.bundles.findOne({ name: /BHI/i });
-var ruleIds = db.bundle_rulesources.distinct('bundleRuleSourceId.ruleId', { bundleId: bundle._id.toString(), deleted: { \$ne: true } });
-var tableNames = db.ruletablemappings.distinct('tableName', { ruleId: { \$in: ruleIds }, deleted: { \$ne: true } });
+kubectl exec -i mongodb-0 -n commons -- env HOME=/tmp mongosh creol-api --quiet --eval "
+var bundle = db.bundles.findOne({ name: /Execution Package BHI/i });
+var ruleIds = db.bundle_rulesources.distinct('bundleRuleSourceId.ruleId', { 'bundleRuleSourceId.bundleId': bundle._id.toString(), deleted: { \$ne: true } });
+var tableNames = [];
+db.rules.find({ _id: { \$in: ruleIds } }, { tableNames: 1 }).forEach(r => {
+  if (r.tableNames) r.tableNames.forEach(t => { if (tableNames.indexOf(t) === -1) tableNames.push(t); });
+});
 print('tableName,docCount,sizeBytes,storageSizeBytes');
 tableNames.forEach(t => {
-  var s = db.runCommand({ collStats: 'table_' + t });
-  print(t + ',' + s.count + ',' + s.size + ',' + s.storageSize);
+  try {
+    var s = db.runCommand({ collStats: 'table_' + t });
+    print(t + ',' + s.count + ',' + s.size + ',' + s.storageSize);
+  } catch(e) { print(t + ',ERROR,,'); }
 });
 " > bhi_tables.csv
