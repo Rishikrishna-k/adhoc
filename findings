@@ -4,8 +4,10 @@ kubectl run pvc-inspector --image=busybox --restart=Never -n cs-bhi-prod --overr
 # Wait for pod
 kubectl wait --for=condition=Ready pod/pvc-inspector -n cs-bhi-prod --timeout=60s
 
-# Get all csv.gz files with sizes from the BHI bundle JAR and pipe locally
-kubectl exec -i pvc-inspector -n cs-bhi-prod -- unzip -l /data/69bad5961ae10655ff01a60b/<date>/rule-bundle.jar | grep "\.csv\.gz" > bhi_tables_sizes.txt
+# Get all csv.gz files with sizes from the tables directory
+kubectl exec -i pvc-inspector -n cs-bhi-prod -- ls -la /data/69bad5961ae10655ff01a60b/20260508/tables/ > bhi_tables_sizes.txt
 
+# Verify locally
+cat bhi_tables_sizes.txt
 # Cleanup
 kubectl delete pod pvc-inspector -n cs-bhi-prod
