@@ -7,6 +7,17 @@ kubectl wait --for=condition=Ready pod/pvc-inspector -n cs-bhi-prod --timeout=60
 # Get all csv.gz files with sizes from the tables directory
 kubectl exec -i pvc-inspector -n cs-bhi-prod -- ls -la /data/69bad5961ae10655ff01a60b/20260508/tables/ > bhi_tables_sizes.txt
 
+# Get compressed size (on disk) AND uncompressed size for each table
+kubectl exec -i pvc-inspector -n cs-bhi-prod -- sh -c "
+cd /data/69bad5961ae10655ff01a60b/20260508/tables
+echo 'tableName,compressedSize_bytes,uncompressedSize_bytes'
+for f in *.csv.gz; do
+  compressed=\$(stat -c%s \"\$f\")
+  uncompressed=\$(gunzip -c \"\$f\" | wc -c)
+  echo \"\${f%.csv.gz},\$compressed,\$uncompressed\"
+done
+" > bhi_tables_sizes.csv
+
 # Verify locally
 cat bhi_tables_sizes.txt
 # Cleanup
