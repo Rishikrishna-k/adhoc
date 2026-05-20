@@ -1,0 +1,86 @@
+# Configuration
+$REGION = "us-east-1"
+$OUTPUT_FILE = "inspector-findings-report.csv"
+
+Write-Host "Fetching Amazon Inspector findings..." -ForegroundColor Cyan
+
+# Write filter files to avoid PowerShell JSON quoting issues
+$criticalFilter = '{"severity":[{"comparison":"EQUALS","value":"CRITICAL"}]}'
+$highFilter     = '{"severity":[{"comparison":"EQUALS","value":"HIGH"}]}'
+
+$criticalFilter | Out-File -FilePath "$env:TEMP\critical-filter.json" -Encoding ascii
+$highFilter     | Out-File -FilePath "$env:TEMP\high-filter.json"     -Encoding ascii
+
+# Fetch CRITICAL findings
+$criticalFindings = aws inspector2 list-findings `
+    --region $REGION `
+    --filter-criteria file://$env:TEMP/critical-filter.json `
+    --output json | ConvertFrom-Json
+
+# Fetch HIGH findings
+$highFindings = aws inspector2 list-findings `
+    --region $REGION `
+    --filter-criteria file://$env:TEMP/high-filter.json `
+    --output json | ConvertFrom-Json
+
+# Parse findings into a report
+$report = @()
+
+foreach ($finding in $criticalFindings.findings) {
+    $report += [PSCustomObject]@{
+        Severity     = "CRITICAL"
+        Title        = $finding.title
+        Description  = $finding.description
+        ResourceType = $finding.resources[0].type
+        ResourceId   = $finding.resources[0].id
+        CVE          = $finding.packageVulnerabilityDetails.vulnerabilityId
+        FixAvailable = $finding.fixAvailable
+        Status       = $finding.status
+    }
+}
+
+foreach ($finding in $highFindings.findings) {
+    $report += [PSCustomObject]@{
+        Severity     = "HIGH"
+        Title        = $finding.title
+        Description  = $finding.description
+        ResourceType = $finding.resources[0].type
+        ResourceId   = $finding.resources[0].id
+        CVE          = $finding.packageVulnerabilityDetails.vulnerabilityId
+        FixAvailable = $finding.fixAvailable
+        Status       = $finding.status
+    }
+}
+
+# Summary
+$criticalCount = ($report | Where-Object { $_.Severity -eq "CRITICAL" }).Count
+$highCount     = ($report | Where-Object { $_.Severity -eq "HIGH" }).Count
+
+Write-Host ""
+Write-Host "========== SUMMARY ==========" -ForegroundColor Yellow
+Write-Host "CRITICAL : $criticalCount"     -ForegroundColor Red
+Write-Host "HIGH     : $highCount"         -ForegroundColor Magenta
+Write-Host "TOTAL    : $($report.Count)"   -ForegroundColor White
+Write-Host "==============================" -ForegroundColor Yellow
+
+# Export to CSV
+$report | Export-Csv -Path $OUTPUT_FILE -NoTypeInformation
+Write-Host ""
+Write-Host "Report saved to: $OUTPUT_FILE" -ForegroundColor Green
+
+# Print titles to console
+Write-Host ""
+Write-Host "--- CRITICAL Findings ---" -ForegroundColor Red
+$report | Where-Object { $_.Severity -eq "CRITICAL" } | ForEach-Object {
+    Write-Host "[$($_.CVE)] $($_.Title) | Fix Available: $($_.FixAvailable)"
+}
+
+Write-Host ""
+Write-Host "--- HIGH Findings ---" -ForegroundColor Magenta
+$report | Where-Object { $_.Severity -eq "HIGH" } | ForEach-Object {
+    Write-Host "[$($_.CVE)] $($_.Title) | Fix Available: $($_.FixAvailable)"
+}
+
+# Cleanup temp files
+Remove-Item "$env:TEMP\critical-filter.json" -Force
+Remove-Item "$env:TEMP\high-filter.json"     -Force
